@@ -41,7 +41,7 @@ It helps you quickly reproduce CI failures inside PyCharm without manually copyi
   ```
   
 ## Examples
-- Run by default (reads branch from `CIRCLE_BRANCH` env var):
+- Run by default (reads branch from `BRANCH` env var):
     ```bash
     python tools/get_tests_failed_from_circleci.py
   
