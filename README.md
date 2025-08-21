@@ -39,8 +39,6 @@ It helps you quickly reproduce CI failures inside PyCharm without manually copyi
            ├── get_tests_failed_from_circleci.py
            └── .env    # CircleCI token and project slug live here
   ```
-  ```bash
-    python tools/get_tests_failed_from_circleci.py
   
 ## Examples
 - Run by default (reads branch from `CIRCLE_BRANCH` env var):
