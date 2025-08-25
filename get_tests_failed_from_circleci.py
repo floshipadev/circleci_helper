@@ -658,8 +658,15 @@ def main():
 
     # Trim leading top-level package to keep 'app.tests....' shape (remove first segment)
     project_root = pathlib.Path(os.getcwd())
-    labels = [s.split('.', 1)[1] if '.' in s else s for s in labels]
-
+    new_labels = []
+    for s in labels:
+        parts = s.split(".")
+        if parts[-1] != parts[0]:
+            ml = parts[1:] + [parts[0]]
+        else:
+            ml = parts[1:]
+        new_labels.append(".".join(ml))
+    labels = new_labels
     # 1) Python run-config (back-compat / minimal integration)
     if not write_django and not write_groups:
         cfg_py = write_pycharm_python_run(project_root, labels)
