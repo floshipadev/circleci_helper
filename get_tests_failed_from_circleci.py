@@ -38,6 +38,7 @@ Usage (from Django project root containing manage.py):
 """
 import os
 import pathlib
+import subprocess
 import sys
 from typing import List, Tuple, Dict, Iterable
 from xml.etree import ElementTree as ET
@@ -322,6 +323,36 @@ def collapse_labels(labels: List[str]) -> List[str]:
 
 
 # ------------------ PyCharm run config ------------------
+def detect_current_git_branch(repo_dir: pathlib.Path) -> str | None:
+    """Returns the current git branch or None if it cannot be determined
+    (e.g., detached HEAD or not a git repository)."""
+    try:
+        # fast and "quiet" way for the usual case
+        res = subprocess.run(
+            ["git", "symbolic-ref", "--quiet", "--short", "HEAD"],
+            cwd=str(repo_dir),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        name = res.stdout.strip()
+        if res.returncode == 0 and name:
+            return name
+        # fallback option
+        res = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=str(repo_dir),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        name = res.stdout.strip()
+        if res.returncode == 0 and name and name != "HEAD":  # "HEAD" means detached
+            return name
+    except Exception:
+        pass
+    return None
+
 def find_manage_py(project_root: pathlib.Path) -> pathlib.Path:
     """Locate manage.py for the Django project.
     Search priority:
@@ -452,7 +483,7 @@ def write_pycharm_django_tests_run(project_root: pathlib.Path, labels: list[str]
     root = Element("component", {"name": "ProjectRunConfigurationManager"})
     cfg = SubElement(root, "configuration", {
         "default": "false",
-        "name": f"CircleCI Failed Django Tests ({branch})",
+        "name": f"CircleCI Failed Django Tests ({branch or 'latest'})",
         "type": "DjangoTestsConfigurationType",
         "factoryName": "Django tests",
     })
@@ -614,6 +645,14 @@ def main():
     if not branch:
         branch = os.environ.get("BRANCH")
 
+    if not branch:
+        try:
+            manage_path = find_manage_py(pathlib.Path(os.getcwd()))
+            repo_dir = manage_path.parent
+            branch = detect_current_git_branch(repo_dir)
+        except SystemExit:
+            pass
+
     # Choose workflows source: specific branch or latest any-branch failure
     if branch:
         _, workflows = workflows_for_branch(token, slug, branch)
@@ -635,8 +674,10 @@ def main():
 
         # 1) Primary path: /tests API
         items = list(iter_tests_api(token, slug, job_no))
+
         failed_via_api = labels_from_tests_api_items(items)
         labels.extend(failed_via_api)
+
 
         # 2) Fallback: parse JUnit XML artifacts (if any were published)
         if not failed_via_api:
@@ -683,6 +724,9 @@ def main():
         for p in written:
             print(f"[OK] Django group config: {p}")
 
+
+    if branch:
+        print(f"Current branch: {branch}")
     # Print a short summary (preview the first 25 labels)
     print(f"Number of failed tests found (after collapse): {len(labels)}")
     for l in labels[:25]:
