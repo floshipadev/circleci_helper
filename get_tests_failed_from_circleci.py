@@ -291,35 +291,14 @@ def labels_from_junit_xml(xml_text: str) -> List[str]:
 
 
 def collapse_labels(labels: List[str]) -> List[str]:
-    """Reduce label verbosity to respect command-length limits.
-    Strategy:
-      - If labels are few and short → return as-is
-      - Else collapse to unique module.Class prefixes
-      - If still too long → collapse further to unique module names
-    Notes:
-      - Use conservative CMD_MAX for Windows shells; Linux/macOS typically allow longer commands
-    """
-    CMD_MAX = 7000  # conservative limit for Windows; Linux/macOS allow more, but keep safe
-    if not labels:
-        return labels
-    cmd_str = "test " + " ".join(labels)
-    if len(labels) <= 100 and len(cmd_str) <= CMD_MAX:
-        return labels
-    # collapse: keep unique module.Class prefixes
-    classes = set()
-    for lb in labels:
-        parts = lb.split(".")
-        if len(parts) >= 2:
-            classes.add(".".join(parts[:-1]))  # drop method
+    transformed = []
+    for s in labels:
+        s_list = s.split(".")
+        if len(s_list) and s_list[0].startswith("test_"):
+            transformed.append('.'.join(s_list[1:]))
         else:
-            classes.add(lb)
-    collapsed = sorted(classes)
-    cmd_str2 = "test " + " ".join(collapsed)
-    if len(cmd_str2) > CMD_MAX and len(collapsed) > 100:
-        # last resort: keep only module names (drop class)
-        modules = sorted({c.rsplit(".", 1)[0] for c in collapsed if "." in c} | {c for c in collapsed if "." not in c})
-        return modules
-    return collapsed
+            transformed.append(s)
+    return sorted(set(transformed))
 
 
 # ------------------ PyCharm run config ------------------
@@ -694,20 +673,9 @@ def main():
         print("No failed tests found - config was not created.")
         return
 
-    # Collapse excessively long label sets to avoid shell limits / PyCharm field limits
     labels = collapse_labels(labels)
 
-    # Trim leading top-level package to keep 'app.tests....' shape (remove first segment)
     project_root = pathlib.Path(os.getcwd())
-    new_labels = []
-    for s in labels:
-        parts = s.split(".")
-        if parts[-1] != parts[0]:
-            ml = parts[1:] + [parts[0]]
-        else:
-            ml = parts[1:]
-        new_labels.append(".".join(ml))
-    labels = new_labels
     # 1) Python run-config (back-compat / minimal integration)
     if not write_django and not write_groups:
         cfg_py = write_pycharm_python_run(project_root, labels)
